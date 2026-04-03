@@ -30,9 +30,7 @@
     <el-card class="mt-16">
       <div class="toolbar">
         <span class="table-title">用户列表</span>
-        <el-tooltip content="不支持新建用户" placement="top">
-          <el-button type="primary" :icon="Plus" disabled>新建用户</el-button>
-        </el-tooltip>
+        <el-button type="primary" :icon="Plus" @click="openCreateDialog">新建用户</el-button>
       </div>
 
       <el-table
@@ -65,12 +63,10 @@
             {{ formatDate(row.date_joined) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
-            <el-tooltip content="不支持删除用户" placement="top">
-              <el-button type="danger" size="small" disabled>删除</el-button>
-            </el-tooltip>
+            <el-button type="danger" size="small" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -87,6 +83,34 @@
         />
       </div>
     </el-card>
+
+    <!-- Create Dialog -->
+    <el-dialog v-model="createDialogVisible" title="新建用户" width="440px" @close="resetCreateForm">
+      <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="90px">
+        <el-form-item label="用户名" prop="username">
+          <el-input v-model="createForm.username" placeholder="请输入用户名" />
+        </el-form-item>
+        <el-form-item label="邮箱" prop="email">
+          <el-input v-model="createForm.email" placeholder="请输入邮箱" />
+        </el-form-item>
+        <el-form-item label="手机号" prop="phone">
+          <el-input v-model="createForm.phone" placeholder="请输入手机号" />
+        </el-form-item>
+        <el-form-item label="密码" prop="password">
+          <el-input v-model="createForm.password" type="password" show-password placeholder="请输入密码" />
+        </el-form-item>
+        <el-form-item label="账号状态">
+          <el-switch v-model="createForm.is_active" active-text="正常" inactive-text="禁用" />
+        </el-form-item>
+        <el-form-item label="管理员">
+          <el-switch v-model="createForm.is_staff" active-text="是" inactive-text="否" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="createLoading" @click="handleCreate">创建</el-button>
+      </template>
+    </el-dialog>
 
     <!-- Edit Dialog -->
     <el-dialog v-model="editDialogVisible" title="编辑用户" width="400px" @close="resetEditForm">
@@ -119,9 +143,9 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus } from '@element-plus/icons-vue'
-import { getUsers, updateUser } from '@/api/user'
+import { getUsers, createUser, updateUser, deleteUser } from '@/api/user'
 import { formatDate } from '@/utils/format'
 
 const loading = ref(false)
@@ -156,6 +180,49 @@ function handleReset() {
   handleSearch()
 }
 
+// Create
+const createDialogVisible = ref(false)
+const createLoading = ref(false)
+const createFormRef = ref(null)
+const createForm = reactive({
+  username: '',
+  email: '',
+  phone: '',
+  password: '',
+  is_active: true,
+  is_staff: false
+})
+
+const createRules = {
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }, { min: 6, message: '密码至少6位', trigger: 'blur' }],
+  email: [{ type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }]
+}
+
+function openCreateDialog() {
+  resetCreateForm()
+  createDialogVisible.value = true
+}
+
+function resetCreateForm() {
+  createFormRef.value?.resetFields()
+  Object.assign(createForm, { username: '', email: '', phone: '', password: '', is_active: true, is_staff: false })
+}
+
+async function handleCreate() {
+  const valid = await createFormRef.value.validate().catch(() => false)
+  if (!valid) return
+  createLoading.value = true
+  try {
+    await createUser({ ...createForm })
+    ElMessage.success('用户创建成功')
+    createDialogVisible.value = false
+    fetchUsers()
+  } finally {
+    createLoading.value = false
+  }
+}
+
 // Edit
 const editDialogVisible = ref(false)
 const editLoading = ref(false)
@@ -188,6 +255,26 @@ async function handleUpdate() {
     fetchUsers()
   } finally {
     editLoading.value = false
+  }
+}
+
+// Delete
+async function handleDelete(row) {
+  try {
+    await ElMessageBox.confirm(`确定要删除用户「${row.username}」吗？此操作不可撤销。`, '警告', {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  try {
+    await deleteUser(row.id)
+    ElMessage.success('删除成功')
+    fetchUsers()
+  } catch {
+    // handled by interceptor
   }
 }
 

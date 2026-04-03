@@ -45,9 +45,6 @@
     <el-card class="mt-16">
       <div class="toolbar">
         <span class="table-title">订单列表</span>
-        <el-tooltip content="不支持新建订单" placement="top">
-          <el-button type="primary" :icon="Plus" disabled>新建订单</el-button>
-        </el-tooltip>
       </div>
 
       <el-table v-loading="loading" :data="orderList" border stripe style="width: 100%">
@@ -74,10 +71,21 @@
         <el-table-column label="创建时间" width="180">
           <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="190" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button type="info" size="small" plain @click="openDetailDrawer(row)">详情</el-button>
-            <el-button type="primary" size="small" @click="openStatusDialog(row)">改状态</el-button>
+            <el-button
+              v-if="getNextStatuses(row.status).length > 0"
+              type="primary"
+              size="small"
+              @click="openStatusDialog(row)"
+            >改状态</el-button>
+            <el-button
+              v-if="canDelete(row.status)"
+              type="danger"
+              size="small"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -141,9 +149,9 @@
         <el-form-item label="新状态">
           <el-select v-model="statusForm.status" style="width: 100%">
             <el-option
-              v-for="(label, val) in STATUS_LABELS"
+              v-for="val in getNextStatuses(statusForm.currentStatus)"
               :key="val"
-              :label="label"
+              :label="STATUS_LABELS[val]"
               :value="val"
             />
           </el-select>
@@ -167,9 +175,9 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Search, Plus } from '@element-plus/icons-vue'
-import { getOrders, getOrder, updateOrderStatus } from '@/api/order'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search, Loading } from '@element-plus/icons-vue'
+import { getOrders, getOrder, updateOrderStatus, deleteOrder } from '@/api/order'
 import { formatDate } from '@/utils/format'
 
 const STATUS_LABELS = {
@@ -178,6 +186,23 @@ const STATUS_LABELS = {
   pending_receipt: '待收货',
   completed: '已完成',
   cancelled: '已取消'
+}
+
+// Valid status transitions
+const STATUS_TRANSITIONS = {
+  pending_payment: ['pending_shipment', 'cancelled'],
+  pending_shipment: ['pending_receipt', 'cancelled'],
+  pending_receipt: ['completed'],
+  completed: [],
+  cancelled: []
+}
+
+function getNextStatuses(current) {
+  return STATUS_TRANSITIONS[current] || []
+}
+
+function canDelete(status) {
+  return status === 'cancelled' || status === 'completed'
 }
 
 function statusTagType(status) {
@@ -259,7 +284,8 @@ const statusForm = reactive({
 function openStatusDialog(row) {
   statusForm.id = row.id
   statusForm.currentStatus = row.status
-  statusForm.status = row.status
+  const nexts = getNextStatuses(row.status)
+  statusForm.status = nexts[0] || ''
   statusForm.tracking_number = row.tracking_number || ''
   statusForm.shipping_company = row.shipping_company || ''
   statusDialogVisible.value = true
@@ -279,6 +305,26 @@ async function handleStatusUpdate() {
     fetchOrders()
   } finally {
     statusLoading.value = false
+  }
+}
+
+// Delete
+async function handleDelete(row) {
+  try {
+    await ElMessageBox.confirm(`确定要删除订单「${row.order_no}」吗？此操作不可撤销。`, '警告', {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  try {
+    await deleteOrder(row.id)
+    ElMessage.success('删除成功')
+    fetchOrders()
+  } catch {
+    // handled by interceptor
   }
 }
 

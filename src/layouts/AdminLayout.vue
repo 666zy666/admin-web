@@ -31,6 +31,10 @@
           <el-icon><List /></el-icon>
           <template #title>订单管理</template>
         </el-menu-item>
+        <el-menu-item index="/banners">
+          <el-icon><Picture /></el-icon>
+          <template #title>轮播图管理</template>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
