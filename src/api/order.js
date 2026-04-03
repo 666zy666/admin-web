@@ -11,3 +11,7 @@ export function getOrder(id) {
 export function updateOrderStatus(id, data) {
   return request.patch(`/api/admin/orders/${id}/status/`, data)
 }
+
+export function deleteOrder(id) {
+  return request.delete(`/api/admin/orders/${id}/`)
+}

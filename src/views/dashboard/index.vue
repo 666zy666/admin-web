@@ -18,6 +18,20 @@
       </el-col>
     </el-row>
 
+    <!-- 7-day order trend chart -->
+    <el-card class="mt-20">
+      <template #header>
+        <span>最近 7 天订单趋势</span>
+      </template>
+      <div v-if="trendLoading" class="chart-loading">
+        <el-icon class="is-loading" size="32"><Loading /></el-icon>
+      </div>
+      <div v-else-if="trendData.length === 0" class="chart-empty">
+        <el-empty description="暂无趋势数据" />
+      </div>
+      <div v-else ref="chartRef" class="chart-container" />
+    </el-card>
+
     <el-card class="mt-20" v-if="overview.order_status_counts">
       <template #header>
         <span>订单状态分布</span>
@@ -42,12 +56,23 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { getOverview } from '@/api/dashboard'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { Loading } from '@element-plus/icons-vue'
+import * as echarts from 'echarts/core'
+import { LineChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+import { getOverview, getOrderTrend } from '@/api/dashboard'
+
+echarts.use([LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 
 const loading = ref(false)
 const error = ref(false)
 const overview = ref({})
+const trendLoading = ref(false)
+const trendData = ref([])
+const chartRef = ref(null)
+let chartInstance = null
 
 const ORDER_STATUS_LABELS = {
   pending_payment: '待付款',
@@ -61,10 +86,8 @@ const statCards = [
   { key: 'total_users', label: '总用户数', icon: 'User', color: '#409eff' },
   { key: 'total_products', label: '总商品数', icon: 'Goods', color: '#67c23a' },
   { key: 'total_orders', label: '总订单数', icon: 'List', color: '#e6a23c' },
-  { key: 'total_revenue', label: '总收入 (元)', icon: 'Money', color: '#f56c6c' },
-  { key: 'today_new_users', label: '今日新增用户', icon: 'UserFilled', color: '#909399' },
   { key: 'today_orders', label: '今日订单数', icon: 'Document', color: '#6f42c1' },
-  { key: 'today_revenue', label: '今日收入 (元)', icon: 'Wallet', color: '#17a2b8' }
+  { key: 'today_revenue', label: '今日销售额 (元)', icon: 'Wallet', color: '#17a2b8' }
 ]
 
 const orderStatusList = computed(() => {
@@ -74,6 +97,42 @@ const orderStatusList = computed(() => {
     count
   }))
 })
+
+function initChart() {
+  if (!chartRef.value || trendData.value.length === 0) return
+  if (chartInstance) {
+    chartInstance.dispose()
+  }
+  chartInstance = echarts.init(chartRef.value)
+  const dates = trendData.value.map((d) => d.date)
+  const counts = trendData.value.map((d) => d.count)
+  chartInstance.setOption({
+    tooltip: { trigger: 'axis' },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', boundaryGap: false, data: dates },
+    yAxis: { type: 'value', minInterval: 1, min: 0 },
+    series: [
+      {
+        name: '订单数',
+        type: 'line',
+        smooth: true,
+        data: counts,
+        itemStyle: { color: '#409eff' },
+        areaStyle: { color: 'rgba(64,158,255,0.15)' }
+      }
+    ]
+  })
+}
+
+watch(
+  () => trendData.value,
+  async (val) => {
+    if (val.length > 0) {
+      await nextTick()
+      initChart()
+    }
+  }
+)
 
 async function fetchData() {
   loading.value = true
@@ -88,7 +147,32 @@ async function fetchData() {
   }
 }
 
-onMounted(fetchData)
+async function fetchTrend() {
+  trendLoading.value = true
+  try {
+    const res = await getOrderTrend()
+    trendData.value = res.data || []
+  } catch {
+    trendData.value = []
+  } finally {
+    trendLoading.value = false
+  }
+}
+
+function handleResize() {
+  chartInstance?.resize()
+}
+
+onMounted(() => {
+  fetchData()
+  fetchTrend()
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  chartInstance?.dispose()
+})
 </script>
 
 <style scoped>
@@ -142,5 +226,24 @@ onMounted(fetchData)
 
 .mt-20 {
   margin-top: 20px;
+}
+
+.chart-container {
+  height: 280px;
+  width: 100%;
+}
+
+.chart-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 280px;
+}
+
+.chart-empty {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 280px;
 }
 </style>
