@@ -36,16 +36,6 @@ export function updateProduct(id, data) {
   })
 }
 
-export function uploadProductImages(id, imageFiles) {
-  // Upload one or more images for an existing product.
-  // Separate call because AdminProductDetailView.put() does not process images.
-  // AdminProductListView.post() processes images, so new products use createProduct().
-  const fd = new FormData()
-  imageFiles.forEach((file) => fd.append('images', file))
-  return request.post(`/api/admin/products/`, fd, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
-}
 
 export function deleteProduct(id) {
   return request.delete(`/api/admin/products/${id}/`)

@@ -347,6 +347,8 @@ function resetForm() {
   editingId.value = null
   newImageFiles.value = []
   existingImages.value = []
+  // Clear the upload component's file list so previously-selected files don't persist
+  uploadRef.value?.clearFiles()
 }
 
 async function handleSubmit() {
