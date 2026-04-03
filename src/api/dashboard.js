@@ -5,5 +5,6 @@ export function getOverview() {
 }
 
 export function getOrderTrend() {
-  return request.get('/api/admin/dashboard/order-trend/')
+  // Backend endpoint: /api/admin/dashboard/trend/ (account/admin_urls.py)
+  return request.get('/api/admin/dashboard/trend/')
 }

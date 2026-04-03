@@ -15,7 +15,36 @@ export function createProduct(formData) {
 }
 
 export function updateProduct(id, data) {
-  return request.put(`/api/admin/products/${id}/`, data)
+  // Backend AdminProductDetailView only has MultiPartParser + FormParser (no JSONParser).
+  // Convert plain object to FormData so the request is sent as multipart/form-data.
+  if (data instanceof FormData) {
+    return request.put(`/api/admin/products/${id}/`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  }
+  const fd = new FormData()
+  for (const [key, val] of Object.entries(data)) {
+    if (val === null || val === undefined) continue
+    if (typeof val === 'boolean') {
+      fd.append(key, val ? 'true' : 'false')
+    } else {
+      fd.append(key, String(val))
+    }
+  }
+  return request.put(`/api/admin/products/${id}/`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
+export function uploadProductImages(id, imageFiles) {
+  // Upload one or more images for an existing product.
+  // Separate call because AdminProductDetailView.put() does not process images.
+  // AdminProductListView.post() processes images, so new products use createProduct().
+  const fd = new FormData()
+  imageFiles.forEach((file) => fd.append('images', file))
+  return request.post(`/api/admin/products/`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
 }
 
 export function deleteProduct(id) {
