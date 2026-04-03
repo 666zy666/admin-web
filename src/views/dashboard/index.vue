@@ -110,7 +110,7 @@ function initChart() {
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
     xAxis: { type: 'category', boundaryGap: false, data: dates },
-    yAxis: { type: 'value', minInterval: 1 },
+    yAxis: { type: 'value', minInterval: 1, min: 0 },
     series: [
       {
         name: '订单数',

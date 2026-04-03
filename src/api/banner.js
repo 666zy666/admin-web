@@ -15,7 +15,10 @@ export function createBanner(formData) {
 }
 
 export function updateBanner(id, data) {
-  return request.put(`/api/admin/banners/${id}/`, data)
+  const isFormData = data instanceof FormData
+  return request.put(`/api/admin/banners/${id}/`, data, isFormData ? {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  } : {})
 }
 
 export function deleteBanner(id) {
