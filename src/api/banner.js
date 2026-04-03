@@ -26,5 +26,6 @@ export function deleteBanner(id) {
 }
 
 export function toggleBannerStatus(id, is_active) {
-  return request.patch(`/api/admin/banners/${id}/`, { is_active })
+  // Backend AdminBannerDetailView has no PATCH handler; use PUT with partial=True support.
+  return request.put(`/api/admin/banners/${id}/`, { is_active })
 }

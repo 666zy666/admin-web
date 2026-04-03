@@ -37,20 +37,26 @@
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column label="图片" width="130">
           <template #default="{ row }">
+            <!--
+              Backend returns absolute URL via request.build_absolute_uri().
+              normalizeImageUrl() also handles relative-path fallback.
+            -->
             <el-image
               v-if="row.image"
-              :src="row.image"
+              :src="normalizeImageUrl(row.image)"
               fit="cover"
               style="width: 100px; height: 56px; border-radius: 4px"
-              :preview-src-list="[row.image]"
+              :preview-src-list="[normalizeImageUrl(row.image)]"
               preview-teleported
             />
             <span v-else class="no-image">无图片</span>
           </template>
         </el-table-column>
         <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="link_url" label="链接" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="sort_order" label="排序" width="80" />
+        <!-- Backend field name: link (not link_url) -->
+        <el-table-column prop="link" label="链接" min-width="160" show-overflow-tooltip />
+        <!-- Backend field name: order (not sort_order) -->
+        <el-table-column prop="order" label="排序" width="80" />
         <el-table-column label="状态" width="110">
           <template #default="{ row }">
             <el-switch
@@ -97,11 +103,13 @@
         <el-form-item label="标题" prop="title">
           <el-input v-model="form.title" placeholder="请输入轮播图标题" />
         </el-form-item>
-        <el-form-item label="跳转链接" prop="link_url">
-          <el-input v-model="form.link_url" placeholder="https://..." />
+        <!-- Backend field: link (not link_url) -->
+        <el-form-item label="跳转链接" prop="link">
+          <el-input v-model="form.link" placeholder="https://..." />
         </el-form-item>
-        <el-form-item label="排序" prop="sort_order">
-          <el-input-number v-model="form.sort_order" :min="0" style="width: 100%" />
+        <!-- Backend field: order (not sort_order) -->
+        <el-form-item label="排序" prop="order">
+          <el-input-number v-model="form.order" :min="0" style="width: 100%" />
         </el-form-item>
         <el-form-item label="状态">
           <el-switch v-model="form.is_active" active-text="上线" inactive-text="下线" />
@@ -118,9 +126,13 @@
               <el-button type="default" :icon="Upload">选择图片</el-button>
             </el-upload>
             <span v-if="imageFile" class="file-name">{{ imageFile.name }}</span>
+            <!--
+              Show existing image preview when editing and no new file selected yet.
+              normalizeImageUrl() handles absolute and relative paths from backend.
+            -->
             <el-image
               v-else-if="isEdit && form.imagePreview"
-              :src="form.imagePreview"
+              :src="normalizeImageUrl(form.imagePreview)"
               fit="cover"
               style="width: 120px; height: 68px; margin-left: 10px; border-radius: 4px; vertical-align: middle"
             />
@@ -143,6 +155,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, Upload } from '@element-plus/icons-vue'
 import { getBanners, createBanner, updateBanner, deleteBanner, toggleBannerStatus } from '@/api/banner'
 import { formatDate } from '@/utils/format'
+import { normalizeImageUrl } from '@/utils/image'
 
 const loading = ref(false)
 const bannerList = ref([])
@@ -203,8 +216,8 @@ const uploadRef = ref(null)
 
 const emptyForm = () => ({
   title: '',
-  link_url: '',
-  sort_order: 0,
+  link: '',        // backend field name: link
+  order: 0,        // backend field name: order
   is_active: true,
   imagePreview: ''
 })
@@ -233,10 +246,10 @@ function openEditDialog(row) {
   imageFile.value = null
   Object.assign(form, {
     title: row.title || '',
-    link_url: row.link_url || '',
-    sort_order: row.sort_order ?? 0,
+    link: row.link || '',          // backend field: link
+    order: row.order ?? 0,         // backend field: order
     is_active: row.is_active !== false,
-    imagePreview: row.image || ''
+    imagePreview: row.image || ''  // row.image is absolute URL from backend
   })
   dialogVisible.value = true
 }
@@ -257,14 +270,15 @@ async function handleSubmit() {
     if (isEdit.value) {
       const payload = {
         title: form.title,
-        link_url: form.link_url,
-        sort_order: form.sort_order,
+        link: form.link,          // backend field: link
+        order: form.order,        // backend field: order
         is_active: form.is_active
       }
       if (imageFile.value) {
         const fd = new FormData()
         for (const [k, v] of Object.entries(payload)) fd.append(k, v)
-        fd.append('image', imageFile.value)
+        // Backend BannerSerializer write-only image field is 'image_upload' (source='image')
+        fd.append('image_upload', imageFile.value)
         await updateBanner(editingId.value, fd)
       } else {
         await updateBanner(editingId.value, payload)
@@ -273,10 +287,13 @@ async function handleSubmit() {
     } else {
       const fd = new FormData()
       fd.append('title', form.title)
-      fd.append('link_url', form.link_url)
-      fd.append('sort_order', String(form.sort_order))
+      fd.append('link', form.link)            // backend field: link
+      fd.append('order', String(form.order))  // backend field: order
       fd.append('is_active', form.is_active ? 'true' : 'false')
-      if (imageFile.value) fd.append('image', imageFile.value)
+      if (imageFile.value) {
+        // Backend write-only image field is named 'image_upload'
+        fd.append('image_upload', imageFile.value)
+      }
       await createBanner(fd)
       ElMessage.success('轮播图创建成功')
     }

@@ -35,15 +35,31 @@
 
       <el-table v-loading="loading" :data="productList" border stripe style="width: 100%">
         <el-table-column prop="id" label="ID" width="70" />
+        <!-- Product image: backend returns images[{id, image}] with absolute URLs -->
+        <el-table-column label="图片" width="120">
+          <template #default="{ row }">
+            <el-image
+              v-if="row.images && row.images.length"
+              :src="normalizeImageUrl(row.images[0].image)"
+              fit="cover"
+              style="width: 90px; height: 56px; border-radius: 4px"
+              :preview-src-list="row.images.map(img => normalizeImageUrl(img.image))"
+              preview-teleported
+            />
+            <span v-else class="no-image">无图片</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip />
         <el-table-column label="价格 (元)" width="120">
           <template #default="{ row }">{{ row.price }}</template>
         </el-table-column>
         <el-table-column prop="brand" label="品牌" width="110" show-overflow-tooltip />
         <el-table-column label="卖家" width="120" show-overflow-tooltip>
+          <!-- seller_username is read-only (source='seller.username') — display only -->
           <template #default="{ row }">{{ row.seller_username || '-' }}</template>
         </el-table-column>
         <el-table-column label="分类" width="120" show-overflow-tooltip>
+          <!-- category_name is read-only (source='category.name') — display only -->
           <template #default="{ row }">{{ row.category_name || '-' }}</template>
         </el-table-column>
         <el-table-column label="状态" width="90">
@@ -151,6 +167,52 @@
               />
             </el-form-item>
           </el-col>
+
+          <!-- Image section ─────────────────────────────────────────────── -->
+          <el-col :span="24">
+            <el-form-item label="商品图片">
+              <div class="image-section">
+                <!--
+                  Create mode: upload new images.
+                  Backend AdminProductListView.post() accepts images[] (multiple files).
+                  Field name must be 'images' (request.FILES.getlist('images')).
+                -->
+                <template v-if="!isEdit">
+                  <el-upload
+                    ref="uploadRef"
+                    :auto-upload="false"
+                    multiple
+                    :show-file-list="true"
+                    :on-change="handleImagesChange"
+                    :on-remove="handleImageRemove"
+                    accept="image/*"
+                    list-type="picture-card"
+                  >
+                    <el-icon><Plus /></el-icon>
+                  </el-upload>
+                </template>
+                <!--
+                  Edit mode: show existing images (read-only).
+                  Backend AdminProductDetailView.put() does not process new image uploads.
+                  Images are stored as ProductImage objects linked to the product.
+                -->
+                <template v-else>
+                  <div v-if="existingImages.length" class="existing-images">
+                    <el-image
+                      v-for="img in existingImages"
+                      :key="img.id"
+                      :src="normalizeImageUrl(img.image)"
+                      fit="cover"
+                      style="width: 80px; height: 80px; border-radius: 4px; margin-right: 8px; margin-bottom: 8px"
+                      :preview-src-list="existingImages.map(i => normalizeImageUrl(i.image))"
+                      preview-teleported
+                    />
+                  </div>
+                  <span v-else class="no-image">暂无图片</span>
+                </template>
+              </div>
+            </el-form-item>
+          </el-col>
         </el-row>
       </el-form>
       <template #footer>
@@ -169,6 +231,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus } from '@element-plus/icons-vue'
 import { getProducts, createProduct, updateProduct, deleteProduct } from '@/api/product'
 import { formatDate } from '@/utils/format'
+import { normalizeImageUrl } from '@/utils/image'
+import { filterReadonlyFields, PRODUCT_READONLY_FIELDS } from '@/utils/field'
 
 const loading = ref(false)
 const productList = ref([])
@@ -208,6 +272,12 @@ const isEdit = ref(false)
 const submitLoading = ref(false)
 const formRef = ref(null)
 const editingId = ref(null)
+const uploadRef = ref(null)
+
+// New images selected in create mode
+const newImageFiles = ref([])
+// Existing images in edit mode (read-only display)
+const existingImages = ref([])
 
 const emptyForm = () => ({
   title: '',
@@ -231,9 +301,19 @@ const rules = {
   price: [{ required: true, message: '请输入价格', trigger: 'blur' }]
 }
 
+function handleImagesChange(file, fileList) {
+  newImageFiles.value = fileList.map((f) => f.raw).filter(Boolean)
+}
+
+function handleImageRemove(file, fileList) {
+  newImageFiles.value = fileList.map((f) => f.raw).filter(Boolean)
+}
+
 function openCreateDialog() {
   isEdit.value = false
   editingId.value = null
+  newImageFiles.value = []
+  existingImages.value = []
   Object.assign(form, emptyForm())
   dialogVisible.value = true
 }
@@ -241,6 +321,9 @@ function openCreateDialog() {
 function openEditDialog(row) {
   isEdit.value = true
   editingId.value = row.id
+  newImageFiles.value = []
+  // images is read-only in ProductSerializer — display existing images only
+  existingImages.value = row.images || []
   Object.assign(form, {
     title: row.title || '',
     price: row.price || 0,
@@ -262,6 +345,10 @@ function resetForm() {
   formRef.value?.resetFields()
   Object.assign(form, emptyForm())
   editingId.value = null
+  newImageFiles.value = []
+  existingImages.value = []
+  // Clear the upload component's file list so previously-selected files don't persist
+  uploadRef.value?.clearFiles()
 }
 
 async function handleSubmit() {
@@ -271,18 +358,23 @@ async function handleSubmit() {
   submitLoading.value = true
   try {
     if (isEdit.value) {
-      const payload = { ...form }
-      if (payload.manufacture_year === null) delete payload.manufacture_year
-      if (payload.working_hours === null) delete payload.working_hours
+      // Build payload, excluding backend read-only fields (seller_username, category_name, images, etc.)
+      const raw = { ...form }
+      if (raw.manufacture_year === null) delete raw.manufacture_year
+      if (raw.working_hours === null) delete raw.working_hours
+      const payload = filterReadonlyFields(raw, PRODUCT_READONLY_FIELDS)
       await updateProduct(editingId.value, payload)
       ElMessage.success('商品更新成功')
     } else {
       const fd = new FormData()
+      // Only append writable, non-empty fields (skip is_active for new products)
       for (const [key, val] of Object.entries(form)) {
         if (val !== null && val !== '' && key !== 'is_active') {
           fd.append(key, val)
         }
       }
+      // Attach selected image files — backend field name: 'images' (getlist)
+      newImageFiles.value.forEach((file) => fd.append('images', file))
       await createProduct(fd)
       ElMessage.success('商品创建成功')
     }
@@ -352,5 +444,22 @@ onMounted(fetchProducts)
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+}
+
+.no-image {
+  font-size: 12px;
+  color: #909399;
+}
+
+.image-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.existing-images {
+  display: flex;
+  flex-wrap: wrap;
 }
 </style>
