@@ -41,10 +41,10 @@
         </el-table-column>
         <el-table-column prop="brand" label="品牌" width="110" show-overflow-tooltip />
         <el-table-column label="卖家" width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.seller?.username || '-' }}</template>
+          <template #default="{ row }">{{ row.seller_username || '-' }}</template>
         </el-table-column>
         <el-table-column label="分类" width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.category?.name || '-' }}</template>
+          <template #default="{ row }">{{ row.category_name || '-' }}</template>
         </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
@@ -294,11 +294,15 @@ async function handleSubmit() {
 }
 
 async function handleDelete(row) {
-  await ElMessageBox.confirm(`确定要删除商品「${row.title}」吗？此操作不可撤销。`, '警告', {
-    confirmButtonText: '确定删除',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).catch(() => null)
+  try {
+    await ElMessageBox.confirm(`确定要删除商品「${row.title}」吗？此操作不可撤销。`, '警告', {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
 
   try {
     await deleteProduct(row.id)

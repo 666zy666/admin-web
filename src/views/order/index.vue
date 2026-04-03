@@ -53,13 +53,13 @@
       <el-table v-loading="loading" :data="orderList" border stripe style="width: 100%">
         <el-table-column prop="order_no" label="订单号" min-width="160" show-overflow-tooltip />
         <el-table-column label="买家" width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.buyer?.username || '-' }}</template>
+          <template #default="{ row }">{{ row.buyer_username || '-' }}</template>
         </el-table-column>
         <el-table-column label="卖家" width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.seller?.username || '-' }}</template>
+          <template #default="{ row }">{{ row.seller_username || '-' }}</template>
         </el-table-column>
         <el-table-column label="商品" min-width="140" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.product?.title || '-' }}</template>
+          <template #default="{ row }">{{ row.product_title || '-' }}</template>
         </el-table-column>
         <el-table-column label="金额 (元)" width="110">
           <template #default="{ row }">{{ row.price }}</template>
@@ -108,15 +108,24 @@
               {{ STATUS_LABELS[currentOrder.status] || currentOrder.status }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="买家">{{ currentOrder.buyer?.username || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="卖家">{{ currentOrder.seller?.username || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="商品">{{ currentOrder.product?.title || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="买家">{{ currentOrder.buyer_username || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="卖家">{{ currentOrder.seller_username || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="商品">{{ currentOrder.product_title || '-' }}</el-descriptions-item>
           <el-descriptions-item label="金额">{{ currentOrder.price }} 元</el-descriptions-item>
           <el-descriptions-item label="快递公司">{{ currentOrder.shipping_company || '-' }}</el-descriptions-item>
           <el-descriptions-item label="快递单号">{{ currentOrder.tracking_number || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="收货地址">{{ currentOrder.address || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="收货地址">
+            <template v-if="currentOrder.address_snapshot">
+              {{ currentOrder.address_snapshot.recipient_name }}
+              {{ currentOrder.address_snapshot.phone }}
+              {{ currentOrder.address_snapshot.province }}{{ currentOrder.address_snapshot.city }}{{ currentOrder.address_snapshot.district }}{{ currentOrder.address_snapshot.detail }}
+            </template>
+            <template v-else>-</template>
+          </el-descriptions-item>
           <el-descriptions-item label="创建时间">{{ formatDate(currentOrder.created_at) }}</el-descriptions-item>
-          <el-descriptions-item label="更新时间">{{ formatDate(currentOrder.updated_at) }}</el-descriptions-item>
+          <el-descriptions-item label="付款时间">{{ formatDate(currentOrder.paid_at) }}</el-descriptions-item>
+          <el-descriptions-item label="发货时间">{{ formatDate(currentOrder.shipped_at) }}</el-descriptions-item>
+          <el-descriptions-item label="完成时间">{{ formatDate(currentOrder.completed_at) }}</el-descriptions-item>
         </el-descriptions>
       </template>
     </el-drawer>
